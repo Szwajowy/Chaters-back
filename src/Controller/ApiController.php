@@ -69,6 +69,18 @@ class ApiController extends AbstractController
     }
 
     /**
+     * Returns a 201 Created
+     *
+     * @param array $data
+     *
+     * @return Symfony\Component\HttpFoundation\JsonResponse
+     */
+    public function respondCreated($data = [])
+    {
+        return $this->setStatusCode(201)->respond($data);
+    }
+
+    /**
      * Returns a 401 Unauthorized http response
      *
      * @param string $message
@@ -78,18 +90,6 @@ class ApiController extends AbstractController
     public function respondUnauthorized($message = 'Not authorized!')
     {
         return $this->setStatusCode(401)->respondWithErrors($message);
-    }
-
-    /**
-     * Returns a 422 Unprocessable Entity
-     *
-     * @param string $message
-     *
-     * @return Symfony\Component\HttpFoundation\JsonResponse
-     */
-    public function respondValidationError($message = 'Validation errors')
-    {
-        return $this->setStatusCode(422)->respondWithErrors($message);
     }
 
     /**
@@ -105,15 +105,15 @@ class ApiController extends AbstractController
     }
 
     /**
-     * Returns a 201 Created
+     * Returns a 422 Unprocessable Entity
      *
-     * @param array $data
+     * @param string $message
      *
      * @return Symfony\Component\HttpFoundation\JsonResponse
      */
-    public function respondCreated($data = [])
+    public function respondValidationError($message = 'Validation errors')
     {
-        return $this->setStatusCode(201)->respond($data);
+        return $this->setStatusCode(422)->respondWithErrors($message);
     }
 
     protected function transformJsonBody(Request $request)

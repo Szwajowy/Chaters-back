@@ -32,8 +32,9 @@ class Message
      * @var \DateTime|null
      *
      * @ORM\Column(name="sendedAt", type="datetime", nullable=true, options={"default"="CURRENT_TIMESTAMP"})
+     * @ORM\Version
      */
-    private $sendedAt = 'CURRENT_TIMESTAMP';
+    private $sendedAt;
 
     /**
      * @var \DateTime|null

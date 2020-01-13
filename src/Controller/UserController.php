@@ -2,13 +2,20 @@
 
 namespace App\Controller;
 
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\HttpFoundation\Request;
+use Doctrine\ORM\EntityManagerInterface;
+
+use App\Entity\User;
+use App\Entity\Friend;
 
 use App\Repository\ChatRepository;
 use App\Repository\MessageRepository;
 use App\Repository\UserRepository;
 use App\Repository\FriendRepository;
+
+use App\Controller\ChatController;
 
 class UserController extends ApiController
 {
@@ -24,75 +31,50 @@ class UserController extends ApiController
         $this->friendRepository = $friendRepository;
     }
 
-    public function getUserInfo($userId)
-    {
-        if($userId != 'all') {
-            $results = $this->userRepository->findBy(
-                array(
-                    'id' => intval( $userId )
-                ), 
-                array());
-        } else {
-            $results = $this->userRepository->findAll();
-        }
-
-        if( $results != null ) {
-            if(count($results) == 1) 
-                return $this->userRepository->transform( $results[0] );
-
-            foreach($results as $user) {
-                $responseData[] = $this->userRepository->transform( $user );
-            }
-            
-            return $responseData;
-        } else {
-            return null;
-        }
-    }
-
     /**
-     * @Route("/user/{userId}/info", name="returnUserInfo")
+     * @Route("/user/{userId}/info", methods={"GET","HEAD"}, name="returnUserInfo")
      */
     public function returnUserInfo($userId)
     {
-        if($responseData = $this->getUserInfo($userId)) {
+        $user = $this->userRepository->find($userId);
+
+        if(!$user)
+            return $this->respondNotFound('Can\'t find user with this id!');
+
+        if($responseData = $this->userRepository->getUserInfo($user)) {
             return $this->respond( $responseData,
                                    ["Access-Control-Allow-Origin" => "*"] );
         } else {
             return $this->respondNotFound();
         }
     }
+    
+    /**
+     * @Route("/user/{userId}", methods={"DELETE"}, name="removeUserInfo")
+     */
+    public function removeUserInfo($userId, EntityManagerInterface $em) {
+        $user = $this->userRepository->find($userId);
 
-    public function getUserFriends($userId)
-    {
-        $friends = $this->friendRepository
-            ->createQueryBuilder('friend')
-            ->select('friend')
-            ->where('friend.userid = :userId or friend.friendid = :userId')
-            ->setParameter(':userId', $userId)
-            ->getQuery()
-            ->getResult();
+        if(!$user)
+            return $this->respondNotFound('Can\'t find user with this id!');
 
-        if( $friends != null ) {
-            foreach($friends as $friend) {
-                if($friend->getUserid()->getId() == $userId) {
-                    $result[] = $this->userRepository->transform($friend->getFriendid());
-                } else {
-                    $result[] = $this->userRepository->transform($friend->getUserid());
-                }
-            }
-            return $result;
-        } else {
-            return null;
-        }
+        $em->remove($user);
+        $em->flush();
+
+        return $this->respondCreated( $this->userRepository->getUserInfo('all') );
     }
 
     /**
-     * @Route("/user/{userId}/friends", name="returnUserFriends")
+     * @Route("/user/{userId}/friends", methods={"GET","HEAD"}, name="returnUserFriends")
      */
     public function returnUserFriends($userId)
     {
-        if($userFriends = $this->getUserFriends($userId)) {
+        $user = $this->userRepository->find($userId);
+
+        if(!$user)
+            return $this->respondNotFound('Can\'t find user with this id!');
+
+        if($userFriends = $this->userRepository->getUserFriends($user)) {
             return $this->respond( $userFriends,
                                    ["Access-Control-Allow-Origin" => "*"] );
         } else {
@@ -100,33 +82,67 @@ class UserController extends ApiController
         }
     }
 
-    public function getUserChats($userId)
-    {
-        $user = $this->userRepository->findBy(
-            array(
-                'id' => intval( $userId )
-            ), 
-            array());
+    /**
+     * @Route("/user/{userId}/friends/{friendId}", methods={"POST"}, name="addUserFriend")
+     */
+    public function addUserFriend($userId, $friendId, EntityManagerInterface $em) {
+        $user = $this->userRepository->find($userId);
 
-        $user = $user[0];
+        if(!$user)
+            return $this->respondNotFound('Can\'t find user with this id!');
 
-        if( $user != null ) {
-            foreach($user->getChatId() as $chat) {
-                $result[] = $this->chatRepository->transform( $chat );
-            }
+        $user2 = $this->userRepository->find($friendId);
 
-            return $result;
-        } else {
-            return null;
-        }
+        if(!$user2)
+            return $this->respondNotFound('Can\'t find friend with this id!');
+
+        if($this->userRepository->isFriend($user, $user2))
+            return $this->respondValidationError('Users are already friends!');
+
+        $friend = new Friend();
+        $friend->setUserid($user);
+        $friend->setFriendid($user2);
+
+        $em->persist($friend);
+        $em->flush();
+
+        return $this->respondCreated( $this->userRepository->getUserFriends($userId) );
     }
 
     /**
-     * @Route("/user/{userId}/chats", name="returnUserChats")
+     * @Route("/user/{userId}/friends/{friendId}", methods={"DELETE"}, name="removeUserFriend")
+     */
+    public function removeUserFriend($userId, $friendId, EntityManagerInterface $em) {
+        $user = $this->userRepository->find($userId);    
+
+        if(!$user)
+            return $this->respondNotFound('Can\'t find user with this id!');
+
+        $user2 = $this->userRepository->find($friendId);
+
+        if(!$user2)
+            return $this->respondNotFound('Can\'t find friend with this id!');
+
+        if(!$this->userRepository->isFriend($user, $user2))
+            return $this->respondValidationError('Users are not friends!');
+
+        $em->remove($user2);
+        $em->flush();
+
+        return $this->respondCreated( $this->userRepository->getUserFriends($userId) );
+    }
+
+    /**
+     * @Route("/user/{userId}/chats", methods={"GET","HEAD"}, name="returnUserChats")
      */
     public function returnUserChats($userId)
     {
-        if($userChats = $this->getUserChats($userId)) {
+        $user = $this->find($userId);
+
+        if(!$user)
+            return $this->respondNotFound('Can\'t find user with this id!');
+
+        if($userChats = $this->userRepository->getUserChats($this->chatRepository, $user)) {
             return $this->respond( $userChats,
                                    ["Access-Control-Allow-Origin" => "*"] );
         } else {
@@ -135,33 +151,90 @@ class UserController extends ApiController
     }
 
     /**
-     * @Route("/user/{userId}", name="returnUserAll")
+     * @Route("/user/{userId}/chats/{chatId}", methods={"POST"}, name="addUserChat")
+     */
+    public function addUserChat($userId, $chatId, EntityManagerInterface $em) {
+        $user = $this->userRepository->find($userId);
+
+        if(!$user)
+            return $this->respondNotFound('Can\'t find user with this id!');
+
+        $chat = $this->chatRepository->find($chatId);
+
+        if(!$chat)
+            return $this->respondNotFound('Can\'t find chat with this id!');
+
+        if($this->userRepository->hasChat($user, $chat))
+            return $this->respondValidationError('User is already member of this chat!');
+
+        $user->addChatId($chat);
+        $em->flush();
+
+        return $this->respondCreated( $this->userRepository->getUserChats($this->chatRepository, $user->getId()) );
+    }
+
+    /**
+     * @Route("/user/{userId}/chat/{chatId}", methods={"DELETE"}, name="removeUserChat")
+     */
+    public function removeUserChat($userId, $chatId, EntityManagerInterface $em) {
+        $user = $this->userRepository->find($userId);
+
+        if(!$user)
+            return $this->respondNotFound('Can\'t find user with this id!');
+
+        $chat = $this->chatRepository->find($chatId);
+
+        if(!$chat)
+            return $this->respondNotFound('Can\'t find chat with this id!');
+
+        if(!$this->userRepository->hasChat($user, $chat))
+            return $this->respondValidationError('User isn\'t member of this chat!');
+
+        $user->removeChatId($chat);
+        $em->flush();
+
+        return $this->respondCreated( $this->userRepository->getUserChats($this->chatRepository, $user->getId()) );
+    }
+
+    /**
+     * @Route("/user/{userId}", methods={"GET","HEAD"}, name="returnUserAll")
      */
     public function returnUserAll($userId)
     {
-        if($resultInfo = $this->getUserInfo($userId)) {
-            if($userId != 'all') {
-                $resultFriends = $this->getUserFriends($userId);
-                $resultChats = $this->getUserChats($userId);
-                
-                $responseData[] = ["info" => $resultInfo,
-                                   "friends" => $resultFriends,
-                                   "chats" => $resultChats];   
-            } else {
-                foreach($resultInfo as $userInfo) {
-                    $userFriends = $this->getUserFriends($userInfo['id']);
-                    $userChats = $this->getUserChats($userInfo['id']);
-    
-                    $responseData[] = ["info" => $userInfo,
-                                       "friends" => $userFriends,
-                                       "chats" => $userChats];
-                }
-            }
+        if($userId != 'all') {
+            $user = $this->userRepository->find($userId);
 
-            return $this->respond( $responseData,
-                                   ["Access-Control-Allow-Origin" => "*"] );
+            if(!$user)
+                return $this->respondNotFound('Can\'t find user with this id!');
+
+            $resultInfo = $this->userRepository->getUserInfo($user);
+            $resultFriends = $this->userRepository->getUserFriends($user);
+            $resultChats = $this->userRepository->getUserChats($this->chatRepository, $user);
+                
+            $responseData[] = ["info" => $resultInfo,
+                                "friends" => $resultFriends,
+                                "chats" => $resultChats];   
         } else {
-            return $this->respondNotFound();
+            $resultInfo = $this->userRepository->getUserInfo();
+
+            foreach($resultInfo as $userInfo) {
+                $user = $this->userRepository->find($userInfo['id']);
+
+                if(!$user)
+                    return $this->respondNotFound('Can\'t find user with this id!');
+
+                $user = $user[0];
+
+                $userFriends = $this->userRepository->getUserFriends($userInfo['id']);
+                $userChats = $this->userRepository->getUserChats($this->chatRepository,$userInfo['id']);
+
+                $responseData[] = ["info" => $userInfo,
+                                    "friends" => $userFriends,
+                                    "chats" => $userChats];
+            }
         }
+        
+        return $this->respond( $responseData,
+                                ["Access-Control-Allow-Origin" => "*"] );
     }
 }

@@ -6,13 +6,15 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
+use Symfony\Component\Security\Core\User\UserInterface;
+
 /**
  * User
  *
  * @ORM\Table(name="user")
  * @ORM\Entity(repositoryClass="App\Repository\UserRepository")
  */
-class User
+class User implements UserInterface, \Serializable
 {
     /**
      * @var int
@@ -26,21 +28,21 @@ class User
     /**
      * @var string|null
      *
-     * @ORM\Column(name="login", type="string", length=45, nullable=true)
+     * @ORM\Column(name="username", type="string", length=45, unique=true, nullable=false)
      */
-    private $login;
+    private $username;
 
     /**
      * @var string|null
      *
-     * @ORM\Column(name="password", type="string", length=45, nullable=true)
+     * @ORM\Column(name="password", type="string", length=45, nullable=false)
      */
     private $password;
 
     /**
      * @var string|null
      *
-     * @ORM\Column(name="email", type="string", length=45, nullable=true)
+     * @ORM\Column(name="email", type="string", length=45, unique=true, nullable=false)
      */
     private $email;
 
@@ -78,14 +80,14 @@ class User
         return $this->id;
     }
 
-    public function getLogin(): ?string
+    public function getUsername(): ?string
     {
-        return $this->login;
+        return $this->username;
     }
 
-    public function setLogin(?string $login): self
+    public function setUsername(?string $username): self
     {
-        $this->login = $login;
+        $this->username = $username;
 
         return $this;
     }
@@ -164,6 +166,43 @@ class User
         }
 
         return $this;
+    }
+
+    public function getRoles()
+    {
+        return [
+            'ROLE_USER'
+        ];
+    }
+
+    public function getSalt()
+    {
+        return null;
+    }
+
+    public function eraseCredentials()
+    {
+
+    }
+
+    public function serialize() {
+        return serialize( [
+            $this->id,
+            $this->username,
+            $this->email,
+            $this->forename,
+            $this->surname
+        ]);
+    }
+
+    public function unserialize($string) {
+        list ( 
+            $this->id,
+            $this->username,
+            $this->email,
+            $this->forename,
+            $this->surname
+        ) = unserialize($string, ['allowed_classes' => false]);
     }
 
 }

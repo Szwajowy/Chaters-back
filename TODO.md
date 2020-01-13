@@ -1,0 +1,9 @@
+- Maybe remove imports of other repositorys inside of repository to prevent loops
+- MORE COMMENTS
+- Take some code from controllers and transfer it to repositories
+- Make more small functions like "isFriend" or "hasChat" to validate requests
+- Create loging/registering controllers
+- Secure all endpoints and make them available for logged users or admins for certain endpoints
+- Ensure that users can edit only their info/chats/messages/etc
+- Style responses more and sort results
+- Maybe split some methods to other controllers and repositories
